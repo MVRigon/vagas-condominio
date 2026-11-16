@@ -60,6 +60,8 @@
   .bid { display: flex; gap: 8px; margin-top: 10px; }
   .bid input { flex: 1; }
   .bid button { flex: 0 0 auto; }
+  button.mini { padding: 2px 8px; font-size: .8rem; margin-left: 6px; color: var(--err); }
+  .tag.admin { background: var(--err-bg); color: var(--err); }
   .empty { text-align: center; padding: 32px 16px; color: var(--muted); }
   .hidden { display: none !important; }
 </style>
@@ -125,6 +127,7 @@
       <button data-aba="vagas" class="on">Vagas disponíveis</button>
       <button data-aba="ofertar">Ofertar minha vaga</button>
       <button data-aba="minhas">Minhas vagas</button>
+      <button data-aba="admin" id="tab-admin" class="hidden">Admin</button>
     </div>
 
     <div id="aba-vagas">
@@ -159,6 +162,11 @@
     <div id="aba-minhas" class="hidden">
       <div id="lista-minhas"></div>
     </div>
+
+    <div id="aba-admin" class="hidden">
+      <p class="muted" style="margin-top:0">Todas as vagas, de todos os moradores (abertas, encerradas e vencidas). Como admin você pode encerrar, reabrir, excluir vagas e apagar lances.</p>
+      <div id="lista-admin"></div>
+    </div>
   </section>
 </main>
 
@@ -179,7 +187,7 @@
   if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("SEU-PROJETO")) { mostrar("tela-config"); return; }
 
   const db = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-  let usuario = null, perfil = null, vagas = [], timer = null, modoCadastro = false;
+  let usuario = null, perfil = null, admin = false, vagas = [], timer = null, modoCadastro = false;
 
   const ROTULO = { diaria: "Diária", mensal: "Mensal" };
   const UNID = { diaria: "dia", mensal: "mês" };
@@ -274,7 +282,10 @@
     perfil = data;
     if (!perfil) { $("quem-txt").textContent = ""; mostrar("tela-perfil"); return; }
 
-    $("quem-txt").textContent = `Bl ${perfil.bloco} · ${perfil.apto}`;
+    const ra = await db.rpc("sou_admin");
+    admin = ra.data === true;
+    $("tab-admin").classList.toggle("hidden", !admin);
+    $("quem-txt").textContent = `Bl ${perfil.bloco} · ${perfil.apto}${admin ? " · admin" : ""}`;
     mostrar("tela-app");
     await carregar();
     clearInterval(timer);
@@ -304,18 +315,19 @@
       <details ${minha ? "open" : ""}>
         <summary>${v.lances.length} lance${v.lances.length > 1 ? "s" : ""}</summary>
         <ol class="hist">${v.lances.map((l) =>
-          `<li><strong>${brl(l.valor)}</strong> — ${apto(l.autor)}${l.usuario_id === usuario.id ? " (você)" : ""} <span class="muted">· ${quando(l.criado_em)}</span></li>`).join("")}
+          `<li><strong>${brl(l.valor)}</strong> — ${apto(l.autor)}${l.usuario_id === usuario.id ? " (você)" : ""} <span class="muted">· ${quando(l.criado_em)}</span>${admin ? `<button class="ghost mini" data-excluir-lance="${l.id}">apagar</button>` : ""}</li>`).join("")}
         </ol>
       </details>` : "";
 
     let acao = "";
-    if (minha) {
+    if (minha || admin) {
       acao = expirou ? `<div class="row" style="margin-top:10px"><button class="ghost" data-excluir="${v.id}">Excluir</button></div>`
         : aberta
         ? `<div class="row" style="margin-top:10px"><button class="ghost" data-encerrar="${v.id}">Encerrar (já aluguei)</button></div>`
         : `<div class="row" style="margin-top:10px"><button class="ghost" data-reabrir="${v.id}">Reabrir ofertas</button><button class="ghost" data-excluir="${v.id}">Excluir</button></div>`;
-    } else if (aberta) {
-      acao = `<form class="bid" data-lance="${v.id}">
+    }
+    if (!minha && aberta) {
+      acao += `<form class="bid" data-lance="${v.id}">
           <input type="number" min="${minimoProx}" step="1" inputmode="decimal" placeholder="Mínimo ${brl(minimoProx)}" required>
           <button type="submit">Dar lance</button>
         </form><div data-msg="${v.id}"></div>`;
@@ -327,7 +339,7 @@
         <div class="muted">${quando(v.criado_em)}</div>
       </div>
       <div class="tags">
-        ${minha ? '<span class="tag mine">Sua vaga</span>' : ""}
+        ${minha ? '<span class="tag mine">Sua vaga</span>' : admin ? '<span class="tag admin">Admin</span>' : ""}
         ${expirou ? '<span class="tag closed">Período passou</span>' : v.status !== "aberta" ? '<span class="tag closed">Encerrada</span>' : ""}
         <span class="tag">${ROTULO[v.modalidade]}</span>
       </div>
@@ -351,13 +363,17 @@
       : `<div class="card empty">Nenhuma vaga disponível${fm ? " com esse filtro" : " no momento"}.</div>`;
     $("lista-minhas").innerHTML = minhas.length ? minhas.map(cardVaga).join("")
       : `<div class="card empty">Você ainda não ofertou nenhuma vaga.</div>`;
+    if (admin) {
+      const todas = [...vagas].sort((a, b) => b.data_ref.localeCompare(a.data_ref));
+      $("lista-admin").innerHTML = todas.length ? todas.map(cardVaga).join("") : `<div class="card empty">Nenhuma vaga cadastrada.</div>`;
+    }
   }
   ["f-modalidade"].forEach((id) => $(id).onchange = renderizar);
 
   // ---------- abas ----------
   document.querySelectorAll("[data-aba]").forEach((b) => b.onclick = () => {
     document.querySelectorAll("[data-aba]").forEach((x) => x.classList.toggle("on", x === b));
-    ["vagas", "ofertar", "minhas"].forEach((a) => $("aba-" + a).classList.toggle("hidden", a !== b.dataset.aba));
+    ["vagas", "ofertar", "minhas", "admin"].forEach((a) => $("aba-" + a).classList.toggle("hidden", a !== b.dataset.aba));
   });
 
   // ---------- ações ----------
@@ -404,14 +420,17 @@
   });
 
   document.addEventListener("click", async (ev) => {
-    const b = ev.target.closest("[data-encerrar],[data-reabrir],[data-excluir]");
+    const b = ev.target.closest("[data-encerrar],[data-reabrir],[data-excluir],[data-excluir-lance]");
     if (!b) return;
+    if (b.dataset.excluir && !confirm("Excluir esta vaga e todos os lances dela?")) return;
+    if (b.dataset.excluirLance && !confirm("Apagar este lance?")) return;
     b.disabled = true;
     let r;
-    if (b.dataset.encerrar) r = await db.from("vagas").update({ status: "encerrada" }).eq("id", b.dataset.encerrar);
+    if (b.dataset.excluirLance) r = await db.from("lances").delete().eq("id", b.dataset.excluirLance);
+    else if (b.dataset.encerrar) r = await db.from("vagas").update({ status: "encerrada" }).eq("id", b.dataset.encerrar);
     else if (b.dataset.reabrir) r = await db.from("vagas").update({ status: "aberta" }).eq("id", b.dataset.reabrir);
     else r = await db.from("vagas").delete().eq("id", b.dataset.excluir);
-    if (r.error) { b.disabled = false; return; }
+    if (r.error) { b.disabled = false; alert(r.error.message); return; }
     await carregar();
   });
 
