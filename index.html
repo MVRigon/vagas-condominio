@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vagas do Condomínio</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #667085;
+    --line: #e3e6eb; --accent: #1f6feb; --accent-text: #ffffff;
+    --ok: #157f3b; --ok-bg: #e6f4ea; --err: #b42318; --err-bg: #fdecea;
+    --tag: #eef2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #98a2b3;
+      --line: #2c3340; --accent: #4c8dff; --accent-text: #0b0e13;
+      --ok: #6fd391; --ok-bg: #183324; --err: #ff8a80; --err-bg: #3a1d1b;
+      --tag: #262d39;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
+  h1 { font-size: 1.1rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  main { padding: 16px 0 48px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  label { display: block; font-size: .9rem; margin: 10px 0 4px; color: var(--muted); }
+  input, select, textarea { width: 100%; padding: 10px 12px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  textarea { resize: vertical; min-height: 60px; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer;
+    background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; }
+  button:disabled { opacity: .55; cursor: default; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  @media (max-width: 420px) { .grid2 { grid-template-columns: 1fr; } }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tabs button { background: var(--card); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  .tabs button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 10px; }
+  .tag { background: var(--tag); border-radius: 999px; padding: 2px 10px; font-size: .82rem; }
+  .tag.mine { background: var(--accent); color: var(--accent-text); }
+  .tag.closed { background: var(--err-bg); color: var(--err); }
+  .vaga-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lance-atual { font-size: 1.4rem; font-weight: 700; }
+  .msg { padding: 10px 12px; border-radius: 8px; margin: 10px 0 0; font-size: .92rem; }
+  .msg.ok { background: var(--ok-bg); color: var(--ok); }
+  .msg.err { background: var(--err-bg); color: var(--err); }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
+  ol.hist { margin: 8px 0 0; padding-left: 20px; font-size: .92rem; }
+  .bid { display: flex; gap: 8px; margin-top: 10px; }
+  .bid input { flex: 1; }
+  .bid button { flex: 0 0 auto; }
+  .empty { text-align: center; padding: 32px 16px; color: var(--muted); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1 id="titulo">Vagas do Condomínio</h1>
+    <div id="quem" class="row hidden" style="flex:0 0 auto;align-items:center">
+      <span id="quem-txt" class="muted"></span>
+      <button class="ghost" id="btn-sair">Sair</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Configuração pendente -->
+  <section id="tela-config" class="card hidden">
+    <h2>Falta configurar</h2>
+    <p>Preencha <code>config.js</code> com a URL e a chave <em>anon</em> do projeto no Supabase (veja o README).</p>
+  </section>
+
+  <!-- Login / cadastro -->
+  <section id="tela-login" class="card hidden">
+    <div class="tabs">
+      <button id="aba-entrar" class="on">Entrar</button>
+      <button id="aba-cadastrar">Criar conta</button>
+    </div>
+    <form id="form-login">
+      <label for="celular">Celular (com DDD)</label>
+      <input id="celular" type="tel" autocomplete="tel-national" inputmode="tel" placeholder="(11) 98765-4321" required>
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" autocomplete="current-password" minlength="6" required>
+      <div id="campos-cadastro" class="hidden">
+        <div class="row">
+          <div><label for="cad-bloco">Bloco</label><input id="cad-bloco" maxlength="10"></div>
+          <div><label for="cad-apto">Apto</label><input id="cad-apto" maxlength="10"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px"><button id="btn-login" type="submit" style="width:100%">Entrar</button></div>
+      <div id="msg-login"></div>
+      <p class="muted" style="margin:12px 0 0">Seu celular não aparece para os vizinhos — eles só veem seu bloco e apto.</p>
+    </form>
+  </section>
+
+  <!-- Perfil (quem já tem conta mas não informou bloco/apto) -->
+  <section id="tela-perfil" class="card hidden">
+    <h2>Seu apartamento</h2>
+    <form id="form-perfil">
+      <div class="row">
+        <div><label for="perf-bloco">Bloco</label><input id="perf-bloco" maxlength="10" required></div>
+        <div><label for="perf-apto">Apto</label><input id="perf-apto" maxlength="10" required></div>
+      </div>
+      <div style="margin-top:14px"><button type="submit">Salvar</button></div>
+      <div id="msg-perfil"></div>
+    </form>
+  </section>
+
+  <!-- App -->
+  <section id="tela-app" class="hidden">
+    <div class="tabs">
+      <button data-aba="vagas" class="on">Vagas disponíveis</button>
+      <button data-aba="ofertar">Ofertar minha vaga</button>
+      <button data-aba="minhas">Minhas vagas</button>
+    </div>
+
+    <div id="aba-vagas">
+      <div class="card">
+        <div class="grid2">
+          <div><label for="f-modalidade">Locação</label>
+            <select id="f-modalidade"><option value="">Diária e mensal</option><option value="diaria">Diária</option><option value="mensal">Mensal</option></select></div>
+        </div>
+      </div>
+      <div id="lista-vagas"></div>
+    </div>
+
+    <div id="aba-ofertar" class="hidden">
+      <form id="form-vaga" class="card">
+        <h2>Ofertar vaga</h2>
+        <p class="muted" style="margin-top:0">Vaga coberta, locada por um dia ou por um mês fechado. Os vizinhos dão lances e todos veem o maior. Você escolhe quando encerrar.</p>
+        <div class="grid2">
+          <div><label for="v-modalidade">Locação</label>
+            <select id="v-modalidade" required><option value="diaria">Diária</option><option value="mensal">Mensal</option></select></div>
+          <div id="campo-dia"><label for="v-dia">Dia</label><input id="v-dia" type="date"></div>
+          <div id="campo-mes" class="hidden"><label for="v-mes">Mês</label><input id="v-mes" type="month"></div>
+        </div>
+        <label for="v-minimo" id="lbl-minimo">Lance mínimo (R$/dia) — opcional</label>
+        <input id="v-minimo" type="number" min="0" step="1" inputmode="decimal" placeholder="0">
+        <label for="v-obs">Observação — opcional</label>
+        <textarea id="v-obs" maxlength="300" placeholder="Ex.: vaga 23 do subsolo, cabe SUV"></textarea>
+        <div style="margin-top:14px"><button type="submit">Publicar vaga</button></div>
+        <div id="msg-vaga"></div>
+      </form>
+    </div>
+
+    <div id="aba-minhas" class="hidden">
+      <div id="lista-minhas"></div>
+    </div>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script>
+  // no computador (localhost) usa config.local.js, que aponta para o Supabase local e não vai para o git
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) document.write('<script src="config.local.js"><\/script>');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+  const cfg = window.APP_CONFIG || {};
+  const $ = (id) => document.getElementById(id);
+  const telas = ["tela-config", "tela-login", "tela-perfil", "tela-app"];
+  const mostrar = (id) => telas.forEach((t) => $(t).classList.toggle("hidden", t !== id));
+
+  if (cfg.NOME_CONDOMINIO) { $("titulo").textContent = cfg.NOME_CONDOMINIO; document.title = cfg.NOME_CONDOMINIO; }
+  if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("SEU-PROJETO")) { mostrar("tela-config"); return; }
+
+  const db = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  let usuario = null, perfil = null, vagas = [], timer = null, modoCadastro = false;
+
+  const ROTULO = { diaria: "Diária", mensal: "Mensal" };
+  const UNID = { diaria: "dia", mensal: "mês" };
+
+  // O celular é o login. Fica guardado como e-mail técnico porque o Supabase grátis não envia SMS.
+  function emailDoCelular(cel) {
+    let d = String(cel).replace(/\D/g, "");
+    if (d.startsWith("55") && d.length >= 12) d = d.slice(2);
+    if (d.length < 10 || d.length > 11) throw new Error("Informe o celular com DDD, ex.: (11) 98765-4321.");
+    return `55${d}@celular.vagas-condominio.app`;
+  }
+
+  // datas "AAAA-MM-DD" tratadas como data local (sem fuso)
+  const parseData = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+  const hoje = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
+  const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const fimPeriodo = (v) => { const d = parseData(v.data_ref); return v.modalidade === "diaria" ? d : new Date(d.getFullYear(), d.getMonth() + 1, 0); };
+  const vencida = (v) => fimPeriodo(v) < hoje();
+  function periodoTxt(v) {
+    const d = parseData(v.data_ref);
+    if (v.modalidade === "mensal") { const m = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return m[0].toUpperCase() + m.slice(1); }
+    return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+  const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const apto = (p) => p ? `Bloco ${esc(p.bloco)} · Apto ${esc(p.apto)}` : "—";
+  const quando = (d) => new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const msg = (el, texto, tipo = "err") => { $(el).innerHTML = texto ? `<div class="msg ${tipo}">${esc(texto)}</div>` : ""; };
+  const erroLegivel = (e) => {
+    const m = e?.message || String(e);
+    if (/Invalid login credentials/i.test(m)) return "Celular ou senha incorretos.";
+    if (/already registered/i.test(m)) return "Este celular já tem conta. Use a aba Entrar.";
+    if (/Password should be/i.test(m)) return "A senha precisa ter pelo menos 6 caracteres.";
+    return m;
+  };
+
+  // ---------- autenticação ----------
+  function alternarModo(cadastro) {
+    modoCadastro = cadastro;
+    $("aba-entrar").classList.toggle("on", !cadastro);
+    $("aba-cadastrar").classList.toggle("on", cadastro);
+    $("campos-cadastro").classList.toggle("hidden", !cadastro);
+    $("cad-bloco").required = $("cad-apto").required = cadastro;
+    $("senha").autocomplete = cadastro ? "new-password" : "current-password";
+    $("btn-login").textContent = cadastro ? "Criar conta" : "Entrar";
+    msg("msg-login", "");
+  }
+  $("aba-entrar").onclick = () => alternarModo(false);
+  $("aba-cadastrar").onclick = () => alternarModo(true);
+
+  $("form-login").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const btn = $("btn-login"); btn.disabled = true; msg("msg-login", "");
+    const password = $("senha").value;
+    try {
+      const email = emailDoCelular($("celular").value);
+      if (modoCadastro) {
+        const { data, error } = await db.auth.signUp({ email, password });
+        if (error) throw error;
+        if (!data.session) { msg("msg-login", "Conta criada, mas o projeto ainda exige confirmação de e-mail: desligue \"Confirm email\" no Supabase."); return; }
+        await salvarPerfil(data.user.id, $("cad-bloco").value, $("cad-apto").value);
+      } else {
+        const { error } = await db.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+      await iniciar();
+    } catch (e) { msg("msg-login", erroLegivel(e)); }
+    finally { btn.disabled = false; }
+  };
+
+  async function salvarPerfil(id, bloco, apto) {
+    const { error } = await db.from("perfis").upsert({ id, bloco: bloco.trim().toUpperCase(), apto: apto.trim().toUpperCase() });
+    if (error) throw error;
+  }
+
+  $("form-perfil").onsubmit = async (ev) => {
+    ev.preventDefault();
+    try { await salvarPerfil(usuario.id, $("perf-bloco").value, $("perf-apto").value); await iniciar(); }
+    catch (e) { msg("msg-perfil", erroLegivel(e)); }
+  };
+
+  $("btn-sair").onclick = async () => { await db.auth.signOut(); location.reload(); };
+
+  async function iniciar() {
+    const { data: { session } } = await db.auth.getSession();
+    usuario = session?.user || null;
+    $("quem").classList.toggle("hidden", !usuario);
+    if (!usuario) { mostrar("tela-login"); return; }
+
+    const { data, error } = await db.from("perfis").select("*").eq("id", usuario.id).maybeSingle();
+    if (error) { mostrar("tela-perfil"); msg("msg-perfil", error.message); return; }
+    perfil = data;
+    if (!perfil) { $("quem-txt").textContent = ""; mostrar("tela-perfil"); return; }
+
+    $("quem-txt").textContent = `Bl ${perfil.bloco} · ${perfil.apto}`;
+    mostrar("tela-app");
+    await carregar();
+    clearInterval(timer);
+    timer = setInterval(() => { if (!document.hidden) carregar(); }, 30000);
+  }
+
+  // ---------- dados ----------
+  async function carregar() {
+    const { data, error } = await db.from("vagas")
+      .select("*, dono:perfis(bloco,apto), lances(id,valor,criado_em,usuario_id,autor:perfis(bloco,apto))")
+      .order("criado_em", { ascending: false });
+    if (error) { $("lista-vagas").innerHTML = `<div class="msg err">${esc(error.message)}</div>`; return; }
+    vagas = data.map((v) => ({ ...v, lances: (v.lances || []).sort((a, b) => b.valor - a.valor) }));
+    renderizar();
+  }
+
+  function cardVaga(v) {
+    const minha = v.dono_id === usuario.id;
+    const top = v.lances[0];
+    const expirou = vencida(v);
+    const aberta = v.status === "aberta" && !expirou;
+    const un = UNID[v.modalidade];
+    const minimoProx = top ? Math.floor(Number(top.valor)) + 1 : Math.max(1, Math.ceil(Number(v.lance_minimo)));
+    const souMaior = top && top.usuario_id === usuario.id;
+
+    const hist = v.lances.length ? `
+      <details ${minha ? "open" : ""}>
+        <summary>${v.lances.length} lance${v.lances.length > 1 ? "s" : ""}</summary>
+        <ol class="hist">${v.lances.map((l) =>
+          `<li><strong>${brl(l.valor)}</strong> — ${apto(l.autor)}${l.usuario_id === usuario.id ? " (você)" : ""} <span class="muted">· ${quando(l.criado_em)}</span></li>`).join("")}
+        </ol>
+      </details>` : "";
+
+    let acao = "";
+    if (minha) {
+      acao = expirou ? `<div class="row" style="margin-top:10px"><button class="ghost" data-excluir="${v.id}">Excluir</button></div>`
+        : aberta
+        ? `<div class="row" style="margin-top:10px"><button class="ghost" data-encerrar="${v.id}">Encerrar (já aluguei)</button></div>`
+        : `<div class="row" style="margin-top:10px"><button class="ghost" data-reabrir="${v.id}">Reabrir ofertas</button><button class="ghost" data-excluir="${v.id}">Excluir</button></div>`;
+    } else if (aberta) {
+      acao = `<form class="bid" data-lance="${v.id}">
+          <input type="number" min="${minimoProx}" step="1" inputmode="decimal" placeholder="Mínimo ${brl(minimoProx)}" required>
+          <button type="submit">Dar lance</button>
+        </form><div data-msg="${v.id}"></div>`;
+    }
+
+    return `<article class="card">
+      <div class="vaga-head">
+        <div><strong>${esc(periodoTxt(v))}</strong><div class="muted">${apto(v.dono)}</div></div>
+        <div class="muted">${quando(v.criado_em)}</div>
+      </div>
+      <div class="tags">
+        ${minha ? '<span class="tag mine">Sua vaga</span>' : ""}
+        ${expirou ? '<span class="tag closed">Período passou</span>' : v.status !== "aberta" ? '<span class="tag closed">Encerrada</span>' : ""}
+        <span class="tag">${ROTULO[v.modalidade]}</span>
+      </div>
+      ${v.observacao ? `<p style="margin:0 0 10px">${esc(v.observacao)}</p>` : ""}
+      <div class="muted">Maior lance (por ${un})</div>
+      <div class="lance-atual">${top ? brl(top.valor) : "Nenhum ainda"}</div>
+      <div class="muted">${top ? `${apto(top.autor)}${souMaior ? " — <strong>você está na frente</strong>" : ""}` : (Number(v.lance_minimo) > 0 ? `Lance mínimo: ${brl(v.lance_minimo)}` : "Sem lance mínimo")}</div>
+      ${hist}
+      ${acao}
+    </article>`;
+  }
+
+  function renderizar() {
+    const fm = $("f-modalidade").value;
+    const disponiveis = vagas.filter((v) => v.status === "aberta" && !vencida(v)
+      && (!fm || v.modalidade === fm))
+      .sort((a, b) => a.data_ref.localeCompare(b.data_ref));
+    const minhas = vagas.filter((v) => v.dono_id === usuario.id);
+
+    $("lista-vagas").innerHTML = disponiveis.length ? disponiveis.map(cardVaga).join("")
+      : `<div class="card empty">Nenhuma vaga disponível${fm ? " com esse filtro" : " no momento"}.</div>`;
+    $("lista-minhas").innerHTML = minhas.length ? minhas.map(cardVaga).join("")
+      : `<div class="card empty">Você ainda não ofertou nenhuma vaga.</div>`;
+  }
+  ["f-modalidade"].forEach((id) => $(id).onchange = renderizar);
+
+  // ---------- abas ----------
+  document.querySelectorAll("[data-aba]").forEach((b) => b.onclick = () => {
+    document.querySelectorAll("[data-aba]").forEach((x) => x.classList.toggle("on", x === b));
+    ["vagas", "ofertar", "minhas"].forEach((a) => $("aba-" + a).classList.toggle("hidden", a !== b.dataset.aba));
+  });
+
+  // ---------- ações ----------
+  function ajustarModalidade() {
+    const mensal = $("v-modalidade").value === "mensal";
+    $("campo-dia").classList.toggle("hidden", mensal);
+    $("campo-mes").classList.toggle("hidden", !mensal);
+    $("v-dia").required = !mensal; $("v-mes").required = mensal;
+    $("lbl-minimo").textContent = `Lance mínimo (R$/${mensal ? "mês" : "dia"}) — opcional`;
+    const h = iso(hoje()); $("v-dia").min = h; $("v-mes").min = h.slice(0, 7);
+  }
+  $("v-modalidade").onchange = ajustarModalidade;
+  ajustarModalidade();
+
+  $("form-vaga").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const modalidade = $("v-modalidade").value;
+    const data_ref = modalidade === "mensal" ? `${$("v-mes").value}-01` : $("v-dia").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data_ref)) { msg("msg-vaga", "Escolha o dia ou o mês da locação."); return; }
+    const btn = ev.submitter; btn.disabled = true; msg("msg-vaga", "");
+    const { error } = await db.from("vagas").insert({
+      modalidade, data_ref,
+      lance_minimo: Number($("v-minimo").value || 0), observacao: $("v-obs").value.trim() || null,
+    });
+    btn.disabled = false;
+    if (error) { msg("msg-vaga", error.message); return; }
+    ev.target.reset(); ajustarModalidade();
+    msg("msg-vaga", "Vaga publicada! Ela já aparece para os vizinhos.", "ok");
+    await carregar();
+  };
+
+  document.addEventListener("submit", async (ev) => {
+    const form = ev.target.closest("[data-lance]");
+    if (!form) return;
+    ev.preventDefault();
+    const id = Number(form.dataset.lance);
+    const valor = Number(form.querySelector("input").value);
+    const btn = form.querySelector("button"); btn.disabled = true;
+    const { error } = await db.from("lances").insert({ vaga_id: id, valor });
+    btn.disabled = false;
+    await carregar(); // re-renderiza com o lance mais recente (inclusive de outros vizinhos)
+    const alvo = document.querySelector(`#aba-vagas [data-msg="${id}"]`) || document.querySelector(`[data-msg="${id}"]`);
+    if (error && alvo) alvo.innerHTML = `<div class="msg err">${esc(error.message)}</div>`;
+  });
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-encerrar],[data-reabrir],[data-excluir]");
+    if (!b) return;
+    b.disabled = true;
+    let r;
+    if (b.dataset.encerrar) r = await db.from("vagas").update({ status: "encerrada" }).eq("id", b.dataset.encerrar);
+    else if (b.dataset.reabrir) r = await db.from("vagas").update({ status: "aberta" }).eq("id", b.dataset.reabrir);
+    else r = await db.from("vagas").delete().eq("id", b.dataset.excluir);
+    if (r.error) { b.disabled = false; return; }
+    await carregar();
+  });
+
+  db.auth.onAuthStateChange((evt) => { if (evt === "SIGNED_OUT") mostrar("tela-login"); });
+  iniciar();
+})();
+</script>
+</body>
+</html>
